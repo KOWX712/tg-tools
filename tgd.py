@@ -29,7 +29,7 @@ def copy_to_clipboard(text):
     tool = get_clipboard_tool()
     if not tool:
         print("No clipboard tool found (wl-copy, xclip, xsel).")
-        return
+        return False
 
     try:
         if tool == 'wl-copy':
@@ -40,8 +40,29 @@ def copy_to_clipboard(text):
             subprocess.run(['xsel', '--clipboard', '--input'], input=text.encode(), check=True)
 
         print(f"Copied to clipboard using {tool}: {text[:50]}...")
+        return True
     except Exception as e:
         print(f"Failed to copy to clipboard: {e}")
+        return False
+
+
+def react_to_message(chat_id, message_id, emoji="👍"):
+    """Reacts to a message with an emoji."""
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/setMessageReaction"
+        data = {
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'reaction': [{'type': 'emoji', 'emoji': emoji}]
+        }
+        response = requests.post(url, json=data, timeout=10).json()
+        if not response.get('ok'):
+            print(f"Failed to react to message with {emoji}: {response}", flush=True)
+        else:
+            print(f"Reacted to message {message_id} with {emoji}", flush=True)
+
+    except Exception as e:
+        print(f"Error reacting to message: {e}", flush=True)
 
 
 def download_file(file_id, file_name):
@@ -53,7 +74,7 @@ def download_file(file_id, file_name):
 
         if not response.get('ok'):
             print(f"Failed to get file info: {response}")
-            return
+            return False
 
         file_path = response['result']['file_path']
         download_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
@@ -68,29 +89,38 @@ def download_file(file_id, file_name):
         with open(local_path, 'wb') as f:
             f.write(file_data)
         print(f"Saved to {local_path}")
+        return True
 
     except Exception as e:
         print(f"Error downloading file: {e}")
+        return False
 
 
 def process_message(message):
     """Processes an individual message."""
-    msg_chat_id = str(message['chat']['id'])
+    chat_id = message['chat']['id']
+    msg_chat_id = str(chat_id)
     if msg_chat_id != str(CHAT_ID):
-        print(f"Ignored message from unauthorized chat: {msg_chat_id}")
+        print(f"Ignored message from unauthorized chat: {msg_chat_id}", flush=True)
         return
 
-    if 'text' in message:
-        copy_to_clipboard(message['text'])
-    elif 'document' in message:
+    message_id = message['message_id']
+
+    if 'document' in message:
         doc = message['document']
-        download_file(doc['file_id'], doc.get('file_name'))
+        if download_file(doc['file_id'], doc.get('file_name')):
+            react_to_message(chat_id, message_id, "👍")
     elif 'photo' in message:
         photo = message['photo'][-1]
-        download_file(photo['file_id'], None)
+        if download_file(photo['file_id'], None):
+            react_to_message(chat_id, message_id, "👍")
     elif 'video' in message:
         video = message['video']
-        download_file(video['file_id'], video.get('file_name'))
+        if download_file(video['file_id'], video.get('file_name')):
+            react_to_message(chat_id, message_id, "👍")
+    elif 'text' in message:
+        if copy_to_clipboard(message['text']):
+            react_to_message(chat_id, message_id, "👍")
 
 
 def run_daemon():
@@ -162,6 +192,7 @@ After=network.target
 [Service]
 ExecStart={python_path} {script_path} run
 WorkingDirectory={working_dir}
+Environment=PYTHONUNBUFFERED=1
 Restart=always
 RestartSec=5
 
