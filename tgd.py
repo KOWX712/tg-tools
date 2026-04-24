@@ -5,6 +5,7 @@ import sys
 import time
 import requests
 import subprocess
+import signal
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -101,9 +102,29 @@ def run_daemon():
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     print(f"Daemon started. Listening for Chat ID: {CHAT_ID}")
     print(f"Downloads will be saved to: {DOWNLOAD_DIR}")
+    env_path = os.path.join(SCRIPT_DIR, ".env")
+    last_env_mtime = os.path.getmtime(env_path) if os.path.exists(env_path) else 0
+
+    def restart_process():
+        print("\n--- Restarting daemon... ---", flush=True)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    signal.signal(signal.SIGHUP, lambda s, f: restart_process())
+
     offset = 0
 
     while True:
+        if os.path.exists(env_path):
+            try:
+                current_mtime = os.path.getmtime(env_path)
+                if current_mtime > last_env_mtime:
+                    print("\n--- .env change detected. ---", flush=True)
+                    restart_process()
+            except Exception:
+                pass
+
         try:
             url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
             params = {'offset': offset, 'timeout': 30}
@@ -181,6 +202,7 @@ def manage_service(command):
     actions = {
         'start': ['systemctl', '--user', 'enable', '--now', 'tgd.service'],
         'stop': ['systemctl', '--user', 'stop', 'tgd.service'],
+        'restart': ['systemctl', '--user', 'restart', 'tgd.service'],
         'status': ['systemctl', '--user', 'status', 'tgd.service'],
         'logs': ['journalctl', '--user', '-u', 'tgd.service', '-f'],
         'uninstall': ['systemctl', '--user', 'disable', '--now', 'tgd.service'],
@@ -215,11 +237,12 @@ def manage_service(command):
 
 
 def print_usage():
-    print("Usage: tgd.py [run|install|start|stop|status|logs|uninstall]")
-    print("\nCommands:")
+    print("Usage: python3 tgd.py [option]")
+    print("\nOptions:")
     print("  run        Run the daemon in current terminal")
     print("  start      Enable and start the systemd service")
     print("  stop       Stop the systemd service")
+    print("  restart    Restart the systemd service")
     print("  status     Show the status of the systemd service")
     print("  logs       Follow the service logs")
     print("  uninstall  Disable and stop the systemd service")
@@ -232,7 +255,7 @@ if __name__ == "__main__":
     cmd = sys.argv[1].lower()
     if cmd == 'run':
         run_daemon()
-    elif cmd in ['install', 'start', 'stop', 'status', 'logs', 'uninstall']:
+    elif cmd in ['install', 'start', 'stop', 'restart', 'status', 'logs', 'uninstall']:
         manage_service(cmd)
     else:
         print_usage()

@@ -22,6 +22,7 @@ The `tgd.py` script now acts as its own service manager:
 | :--- | :--- |
 | `python3 tgd.py start` | Install, enable, and start the background service |
 | `python3 tgd.py stop` | Stop the background service |
+| `python3 tgd.py restart` | Restart the background service |
 | `python3 tgd.py status` | Show current status of the service |
 | `python3 tgd.py logs` | View live logs (follow output) |
 | `python3 tgd.py uninstall` | Disable and stop the service |
