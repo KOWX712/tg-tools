@@ -3,6 +3,8 @@
 import os
 import sys
 import requests
+import shutil
+import subprocess
 from dotenv import load_dotenv
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -10,6 +12,15 @@ load_dotenv(os.path.join(SCRIPT_DIR, ".env"))
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+
+def send_notification(message, urgency="normal", icon="telegram"):
+    """Sends a desktop notification using notify-send."""
+    if shutil.which("notify-send"):
+        try:
+            subprocess.run(["notify-send", "-u", urgency, "-i", icon, "Telegram Tool", message], check=False)
+        except Exception as e:
+            print(f"Failed to send notification: {e}")
+
 
 def send_file(file_path):
     """
@@ -35,18 +46,26 @@ def send_file(file_path):
             response = requests.post(url, data=data, files=files, timeout=30)
 
         if response.status_code == 200:
-            print(f"Successfully sent: {os.path.basename(file_path)}")
+            success_msg = f"Successfully sent: {os.path.basename(file_path)}"
+            print(success_msg)
+            send_notification(success_msg)
             return True
         else:
-            print(f"Failed to send file. Status code: {response.status_code}")
+            fail_msg = f"Failed to send file. Status code: {response.status_code}"
+            print(fail_msg)
             print(f"Response: {response.text}")
+            send_notification(fail_msg, urgency="critical")
             return False
 
     except requests.exceptions.Timeout:
-        print(f"Error: Connection timed out while sending {os.path.basename(file_path)}.")
+        timeout_msg = f"Error: Connection timed out while sending {os.path.basename(file_path)}."
+        print(timeout_msg)
+        send_notification(timeout_msg, urgency="critical")
         return False
     except Exception as e:
-        print(f"An error occurred: {e}")
+        error_msg = f"An error occurred: {e}"
+        print(error_msg)
+        send_notification(error_msg, urgency="critical")
         return False
 
 

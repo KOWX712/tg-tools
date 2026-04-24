@@ -5,7 +5,9 @@ import sys
 import time
 import requests
 import subprocess
+import shutil
 import signal
+import threading
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -15,6 +17,35 @@ load_dotenv(os.path.join(SCRIPT_DIR, ".env"))
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 DOWNLOAD_DIR = os.path.expanduser("~/Downloads")
+
+def send_notification(message, urgency="normal", icon="telegram", action_path=None):
+    """Sends a desktop notification using notify-send."""
+    if shutil.which("notify-send"):
+        try:
+            cmd = ["notify-send", "-u", urgency, "-i", icon, "Telegram Tool", message]
+
+            if action_path and os.path.exists(action_path):
+                if os.path.isfile(action_path):
+                    action_path = os.path.dirname(action_path)
+
+                cmd.extend(["--action=open=Open"])
+
+                def handle_action():
+                    try:
+                        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+                        stdout, _ = proc.communicate()
+                        if "open" in stdout.strip():
+                            if shutil.which("xdg-open"):
+                                subprocess.run(["xdg-open", action_path], check=False)
+                    except Exception as e:
+                        print(f"Error handling notification action: {e}")
+
+                threading.Thread(target=handle_action, daemon=True).start()
+            else:
+                subprocess.run(cmd, check=False)
+        except Exception as e:
+            print(f"Failed to send notification: {e}")
+
 
 def get_clipboard_tool():
     """Finds available clipboard tool."""
@@ -40,9 +71,12 @@ def copy_to_clipboard(text):
             subprocess.run(['xsel', '--clipboard', '--input'], input=text.encode(), check=True)
 
         print(f"Copied to clipboard using {tool}: {text[:50]}...")
+        send_notification(f"Copied to clipboard: {text[:50]}...")
         return True
     except Exception as e:
-        print(f"Failed to copy to clipboard: {e}")
+        msg = f"Failed to copy to clipboard: {e}"
+        print(msg)
+        send_notification(msg, urgency="critical")
         return False
 
 
@@ -88,11 +122,15 @@ def download_file(file_id, file_name):
         file_data = requests.get(download_url, timeout=30).content
         with open(local_path, 'wb') as f:
             f.write(file_data)
-        print(f"Saved to {local_path}")
+        success_msg = f"Saved to {local_path}"
+        print(success_msg)
+        send_notification(f"Downloaded: {file_name}", action_path=local_path)
         return True
 
     except Exception as e:
-        print(f"Error downloading file: {e}")
+        fail_msg = f"Error downloading file: {e}"
+        print(fail_msg)
+        send_notification(fail_msg, urgency="critical")
         return False
 
 
