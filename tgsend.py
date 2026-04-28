@@ -22,6 +22,47 @@ def send_notification(message, urgency="normal", icon="telegram"):
             print(f"Failed to send notification: {e}")
 
 
+def send_message(text):
+    """
+    Sends a text message to a Telegram chat using the Telegram Bot API.
+    """
+    if not BOT_TOKEN or not CHAT_ID:
+        env_path = os.path.join(SCRIPT_DIR, ".env")
+        print("Error: BOT_TOKEN or CHAT_ID not found.")
+        print(f"Looked in: {env_path}")
+        return False
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+    print(f"Sending message: {text[:50]}{'...' if len(text) > 50 else ''}")
+    try:
+        data = {'chat_id': CHAT_ID, 'text': text}
+        response = requests.post(url, data=data, timeout=30)
+
+        if response.status_code == 200:
+            success_msg = "Successfully sent text message"
+            print(success_msg)
+            send_notification(success_msg)
+            return True
+        else:
+            fail_msg = f"Failed to send message. Status code: {response.status_code}"
+            print(fail_msg)
+            print(f"Response: {response.text}")
+            send_notification(fail_msg, urgency="critical")
+            return False
+
+    except requests.exceptions.Timeout:
+        timeout_msg = "Error: Connection timed out while sending message."
+        print(timeout_msg)
+        send_notification(timeout_msg, urgency="critical")
+        return False
+    except Exception as e:
+        error_msg = f"An error occurred: {e}"
+        print(error_msg)
+        send_notification(error_msg, urgency="critical")
+        return False
+
+
 def send_file(file_path):
     """
     Sends a file to a Telegram chat using the Telegram Bot API.
@@ -33,8 +74,7 @@ def send_file(file_path):
         return False
 
     if not os.path.isfile(file_path):
-        print(f"Error: File '{file_path}' not found.")
-        return False
+        return send_message(file_path)
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
 
@@ -115,7 +155,7 @@ def uninstall_kde_service():
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: tgsend.py <file1> <file2> ...")
+        print("Usage: tgsend.py <file|text> [file|text] ...")
         print("       tgsend.py install-service kde")
         print("       tgsend.py uninstall")
     else:
@@ -125,6 +165,9 @@ if __name__ == "__main__":
         elif cmd == 'uninstall':
             uninstall_kde_service()
         else:
-            files_to_send = sys.argv[1:]
-            for file_path in files_to_send:
-                send_file(file_path)
+            inputs = sys.argv[1:]
+            for item in inputs:
+                if os.path.isfile(item):
+                    send_file(item)
+                else:
+                    send_message(item)

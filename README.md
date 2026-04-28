@@ -38,11 +38,11 @@ systemctl --user import-environment WAYLAND_DISPLAY XDG_RUNTIME_DIR DISPLAY
 
 ## 2. Telegram Sender (`tgsend.py`)
 
-A simple CLI tool to send files to your Telegram chat.
+A simple CLI tool to send files or text to your Telegram chat.
 
 ### Usage
 ```bash
-python3 tgsend.py <file1> [file2] ...
+python3 tgsend.py <file1|text1> [file2|text2] ...
 ```
 
 ### KDE Service Menu Integration
