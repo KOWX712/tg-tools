@@ -39,7 +39,12 @@ The systemd service uses `KillMode=process` so child processes (e.g. tmux sessio
 
 ### Custom Commands
 
-Drop a `.py` file into the `command/` directory. The daemon auto-discovers all modules on startup, loads them, and registers them with Telegram via `setMyCommands`.
+Drop a `.py` file into the `command/` directory, or a subdirectory with a matching `.py` file. The daemon auto-discovers all modules on startup, loads them, and registers them with Telegram via `setMyCommands`.
+
+| Layout | Command | Example |
+|--------|---------|---------|
+| `command/hello.py` | `/hello` | Flat file |
+| `command/tmux/tmux.py` | `/tmux` | One-level subdirectory |
 
 #### Module Interface
 
@@ -50,7 +55,7 @@ Drop a `.py` file into the `command/` directory. The daemon auto-discovers all m
 | `run(message, bot_token)` | Handler — receives the message dict and bot token, returns reply text |
 | `handle_callback(callback_query, bot_token)` | _Optional._ Handles inline keyboard button presses |
 
-#### Simple Example (`command/hello.py`)
+#### Demo module (`command/hello.py`)
 ```python
 COMMAND = "hello"
 HELP = "Send a greeting"
@@ -58,13 +63,6 @@ HELP = "Send a greeting"
 def run(message: dict, bot_token: str) -> str:
     return "hi"
 ```
-
-#### Interactive Example with Inline Keyboard (`command/tmux.py`)
-A built-in command that uses `handle_callback` for interactive tmux session management:
-
-- **`/tmux`** — Shows an inline keyboard with **Start** / **Stop** / **List** buttons
-- **Start** creates a new tmux session, **Stop** kills all sessions, **List** shows active sessions
-- The `run()` function sends the initial message with buttons; `handle_callback()` processes each button press via `editMessageText` and `answerCallbackQuery`
 
 ---
 

@@ -123,10 +123,27 @@ def load_commands():
         return
 
     for entry in sorted(os.listdir(command_dir)):
-        if entry.startswith("_") or not entry.endswith(".py"):
+        if entry.startswith("_"):
             continue
-        module_name = entry[:-3]
-        module_path = os.path.join(command_dir, entry)
+        module_name = None
+        module_path = None
+
+        if entry.endswith(".py"):
+            # Flat file: command/hello.py → /hello
+            module_name = entry[:-3]
+            module_path = os.path.join(command_dir, entry)
+        else:
+            # One-level subdirectory: command/tmux/tmux.py → /tmux
+            subdir = os.path.join(command_dir, entry)
+            if os.path.isdir(subdir):
+                nested = os.path.join(subdir, f"{entry}.py")
+                if os.path.isfile(nested):
+                    module_name = entry
+                    module_path = nested
+
+        if module_name is None or module_path is None:
+            continue
+
         try:
             spec = importlib.util.spec_from_file_location(module_name, module_path)
             module = importlib.util.module_from_spec(spec)
