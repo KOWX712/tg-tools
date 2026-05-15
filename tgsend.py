@@ -109,6 +109,82 @@ def send_file(file_path):
         return False
 
 
+def _install_script():
+    """Install this script to a PATH directory or add shell rc export."""
+    script_path = os.path.realpath(__file__)
+    script_name = os.path.basename(script_path).rsplit('.', 1)[0]
+
+    st = os.stat(script_path)
+    os.chmod(script_path, st.st_mode | 0o111)
+
+    for p in os.environ.get('PATH', '').split(':'):
+        if not p or not os.path.isdir(p):
+            continue
+        link_path = os.path.join(p, script_name)
+        if os.path.islink(link_path) and os.path.realpath(link_path) == script_path:
+            print(f"Already installed at: {link_path}")
+            return
+        try:
+            if os.path.islink(link_path) or os.path.exists(link_path):
+                os.remove(link_path)
+            os.symlink(script_path, link_path)
+            print(f"Installed to: {link_path}")
+            return
+        except (PermissionError, OSError):
+            continue
+
+    shell = os.environ.get('SHELL', '/bin/bash')
+    rc_file = os.path.expanduser('~/.zshrc') if 'zsh' in shell else os.path.expanduser('~/.bashrc')
+    export_line = f'export {script_name}="{script_path}"'
+
+    if os.path.exists(rc_file):
+        with open(rc_file) as f:
+            if export_line in f.read():
+                print(f"Already exported in {rc_file}")
+                print(f"  {export_line}")
+                return
+
+    with open(rc_file, 'a') as f:
+        f.write(f'\n# Telegram Tools\nexport {script_name}="{script_path}"\n')
+
+    print(f"Added to {rc_file}: {export_line}")
+    print(f"Run: source {rc_file}")
+
+
+def _uninstall_script():
+    """Remove symlinks and rc exports for this script."""
+    script_path = os.path.realpath(__file__)
+    script_name = os.path.basename(script_path).rsplit('.', 1)[0]
+
+    found = shutil.which(script_name)
+    removed = False
+    if found and os.path.islink(found):
+        real = os.path.realpath(found)
+        if real == script_path:
+            try:
+                os.remove(found)
+                print(f"Removed symlink: {found}")
+                removed = True
+            except OSError as e:
+                print(f"Error removing symlink: {e}")
+
+    if not removed:
+        print(f"No symlink found for '{script_name}' in PATH")
+
+    for rc in ('~/.bashrc', '~/.zshrc'):
+        rc_path = os.path.expanduser(rc)
+        if not os.path.exists(rc_path):
+            continue
+        export_line = f'export {script_name}="{script_path}"'
+        with open(rc_path) as f:
+            lines = f.readlines()
+        filtered = [l for l in lines if export_line not in l]
+        if len(filtered) != len(lines):
+            with open(rc_path, 'w') as f:
+                f.writelines(filtered)
+            print(f"Removed export from {rc_path}")
+
+
 def install_kde_service():
     """Installs KDE service menu."""
     python_path = sys.executable
@@ -156,14 +232,18 @@ def uninstall_kde_service():
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: tgsend.py <file|text> [file|text] ...")
+        print("       tgsend.py install")
         print("       tgsend.py install-service kde")
         print("       tgsend.py uninstall")
     else:
         cmd = sys.argv[1].lower()
-        if cmd == 'install-service' and len(sys.argv) > 2 and sys.argv[2].lower() == 'kde':
+        if cmd == 'install':
+            _install_script()
+        elif cmd == 'install-service' and len(sys.argv) > 2 and sys.argv[2].lower() == 'kde':
             install_kde_service()
         elif cmd == 'uninstall':
             uninstall_kde_service()
+            _uninstall_script()
         else:
             inputs = sys.argv[1:]
             for item in inputs:
