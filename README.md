@@ -13,26 +13,58 @@ A background listener that monitors your Telegram chat and performs automated ac
 - **Receive Files**: Automatically downloads any document, photo, or video sent to the bot directly to your `~/Downloads` folder.
 - **Auto-Clipboard**: Any text message sent to the bot is automatically copied to your system clipboard.
   - Supports `wl-copy` (Wayland), `xclip` (X11), and `xsel` (X11).
+- **Custom Commands**: Drop Python modules into `command/` to add slash commands (e.g., `/hello`). The daemon auto-discovers and registers them with Telegram on startup.
 - **Security**: Only listens to messages from your authorized `CHAT_ID` (set in `.env`).
 
 ### Usage & Service Management
-The `tgd.py` script now acts as its own service manager:
 
 | Command | Action |
 | :--- | :--- |
-| `python3 tgd.py start` | Install, enable, and start the background service |
-| `python3 tgd.py stop` | Stop the background service |
-| `python3 tgd.py restart` | Restart the background service |
-| `python3 tgd.py status` | Show current status of the service |
-| `python3 tgd.py logs` | View live logs (follow output) |
-| `python3 tgd.py uninstall` | Disable and stop the service |
-| `python3 tgd.py run` | Run the daemon manually in the current terminal |
+| `python3 tgd.py run`      | Run the daemon manually in the current terminal |
+| `python3 tgd.py install`  | Install script to PATH (symlink or shell rc) |
+| `python3 tgd.py start`    | Enable and start the systemd service (implies `install`) |
+| `python3 tgd.py stop`     | Stop the background service |
+| `python3 tgd.py restart`  | Restart the background service |
+| `python3 tgd.py status`   | Show current status of the service |
+| `python3 tgd.py logs`     | View live logs (follow output) |
+| `python3 tgd.py uninstall`| Remove from PATH and disable the systemd service |
 
 ### Troubleshooting
 If the clipboard functionality fails when running as a service, ensure systemd has access to your Wayland/X11 session:
 ```bash
 systemctl --user import-environment WAYLAND_DISPLAY XDG_RUNTIME_DIR DISPLAY
 ```
+
+The systemd service uses `KillMode=process` so child processes (e.g. tmux sessions) are **not** killed when the service restarts or stops.
+
+### Custom Commands
+
+Drop a `.py` file into the `command/` directory. The daemon auto-discovers all modules on startup, loads them, and registers them with Telegram via `setMyCommands`.
+
+#### Module Interface
+
+| Attribute | Description |
+| :--- | :--- |
+| `COMMAND` | The slash command name (e.g. `"hello"` for `/hello`) |
+| `HELP` | Short description shown in Telegram's command list |
+| `run(message, bot_token)` | Handler — receives the message dict and bot token, returns reply text |
+| `handle_callback(callback_query, bot_token)` | _Optional._ Handles inline keyboard button presses |
+
+#### Simple Example (`command/hello.py`)
+```python
+COMMAND = "hello"
+HELP = "Send a greeting"
+
+def run(message: dict, bot_token: str) -> str:
+    return "hi"
+```
+
+#### Interactive Example with Inline Keyboard (`command/tmux.py`)
+A built-in command that uses `handle_callback` for interactive tmux session management:
+
+- **`/tmux`** — Shows an inline keyboard with **Start** / **Stop** / **List** buttons
+- **Start** creates a new tmux session, **Stop** kills all sessions, **List** shows active sessions
+- The `run()` function sends the initial message with buttons; `handle_callback()` processes each button press via `editMessageText` and `answerCallbackQuery`
 
 ---
 
@@ -45,14 +77,11 @@ A simple CLI tool to send files or text to your Telegram chat.
 python3 tgsend.py <file1|text1> [file2|text2] ...
 ```
 
-### KDE Service Menu Integration
-
-- A right-click "Service Menu" for Dolphin allows you to send files directly from your file manager.
-
 | Command | Action |
 | :--- | :--- |
-| `python3 tgsend.py install-service kde` | Install the KDE right-click menu |
-| `python3 tgsend.py uninstall`           | Remove installed service |
+| `python3 tgsend.py install`            | Install script to PATH (symlink or shell rc) |
+| `python3 tgsend.py install-service kde`| Install the KDE Dolphin right-click menu |
+| `python3 tgsend.py uninstall`          | Remove from PATH and uninstall KDE service menu |
 
 ---
 
