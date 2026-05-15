@@ -8,6 +8,7 @@ import subprocess
 import shutil
 import signal
 import threading
+import importlib.util
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -99,6 +100,86 @@ def react_to_message(chat_id, message_id, emoji="👍"):
         print(f"Error reacting to message: {e}", flush=True)
 
 
+COMMANDS = {}
+
+
+def send_reply(chat_id, text):
+    """Sends a reply text message to a Telegram chat."""
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        data = {'chat_id': chat_id, 'text': text}
+        response = requests.post(url, data=data, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Error sending reply: {e}", flush=True)
+        return False
+
+
+def load_commands():
+    """Dynamically loads all command modules from the command/ directory."""
+    global COMMANDS
+    command_dir = os.path.join(SCRIPT_DIR, "command")
+    if not os.path.isdir(command_dir):
+        return
+
+    for entry in sorted(os.listdir(command_dir)):
+        if entry.startswith("_") or not entry.endswith(".py"):
+            continue
+        module_name = entry[:-3]
+        module_path = os.path.join(command_dir, entry)
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            if hasattr(module, "run"):
+                COMMANDS[module_name] = module
+                print(f"Loaded command: /{module_name}", flush=True)
+        except Exception as e:
+            print(f"Failed to load command '{module_name}': {e}", flush=True)
+
+
+def update_command_list():
+    """Registers all loaded commands with Telegram's setMyCommands."""
+    if not COMMANDS:
+        return
+
+    commands = []
+    for name, mod in COMMANDS.items():
+        cmd = getattr(mod, "COMMAND", name)
+        help_text = getattr(mod, "HELP", "")
+        commands.append({"command": cmd, "description": help_text[:128]})
+
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/setMyCommands"
+        response = requests.post(url, json={"commands": commands}, timeout=10).json()
+        if response.get("ok"):
+            print(f"Registered {len(commands)} command(s) with Telegram", flush=True)
+        else:
+            print(f"Failed to register commands: {response}", flush=True)
+    except Exception as e:
+        print(f"Error registering commands: {e}", flush=True)
+
+
+def process_command(message, text):
+    """Routes a command message to the appropriate handler."""
+    chat_id = message['chat']['id']
+    message_id = message['message_id']
+
+    parts = text.split()
+    cmd = parts[0].lstrip("/").split("@")[0].lower()
+
+    if cmd in COMMANDS:
+        try:
+            response = COMMANDS[cmd].run(message, BOT_TOKEN)
+            if response:
+                send_reply(chat_id, response)
+                react_to_message(chat_id, message_id, "👍")
+        except Exception as e:
+            print(f"Error executing /{cmd}: {e}", flush=True)
+    else:
+        send_reply(chat_id, f"Unknown command: /{cmd}")
+
+
 def download_file(file_id, file_name):
     """Downloads a file from Telegram."""
     try:
@@ -157,7 +238,10 @@ def process_message(message):
         if download_file(video['file_id'], video.get('file_name')):
             react_to_message(chat_id, message_id, "👍")
     elif 'text' in message:
-        if copy_to_clipboard(message['text']):
+        text = message['text']
+        if text.startswith("/"):
+            process_command(message, text)
+        elif copy_to_clipboard(text):
             react_to_message(chat_id, message_id, "👍")
 
 
@@ -181,6 +265,8 @@ def run_daemon():
 
     signal.signal(signal.SIGHUP, lambda s, f: restart_process())
 
+    load_commands()
+    update_command_list()
     offset = 0
 
     while True:

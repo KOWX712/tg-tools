@@ -3,3 +3,5 @@
 
 # generated
 tgd.service
+__pycache__
+*.pyc
