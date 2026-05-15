@@ -180,6 +180,20 @@ def process_command(message, text):
         send_reply(chat_id, f"Unknown command: /{cmd}")
 
 
+def process_callback_query(callback_query):
+    """Routes a callback query to the appropriate command module."""
+    data = callback_query.get("data", "")
+    cmd_name = data.split(":", 1)[0] if ":" in data else data
+
+    if cmd_name in COMMANDS:
+        mod = COMMANDS[cmd_name]
+        if hasattr(mod, "handle_callback"):
+            try:
+                mod.handle_callback(callback_query, BOT_TOKEN)
+            except Exception as e:
+                print(f"Error in callback for {cmd_name}: {e}", flush=True)
+
+
 def download_file(file_id, file_name):
     """Downloads a file from Telegram."""
     try:
@@ -288,6 +302,8 @@ def run_daemon():
                 for update in response['result']:
                     if 'message' in update:
                         process_message(update['message'])
+                    elif 'callback_query' in update:
+                        process_callback_query(update['callback_query'])
                     offset = update['update_id'] + 1
             else:
                 print(f"Error from Telegram: {response}")
