@@ -332,6 +332,7 @@ After=network.target
 [Service]
 ExecStart={python_path} {script_path} run
 WorkingDirectory={working_dir}
+KillMode=process
 Environment=PYTHONUNBUFFERED=1
 Restart=always
 RestartSec=5
