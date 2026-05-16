@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import subprocess
 import shutil
 import requests
@@ -112,6 +113,7 @@ def handle_callback(callback_query, bot_token):
             r = subprocess.run(
                 ["tmux", "new-session", "-d"],
                 capture_output=True, text=True, timeout=5,
+                cwd=os.path.expanduser("~"),
             )
             text = MESSAGE["start"] if r.returncode == 0 \
                 else f"{TITLE}Failed to start a new tmux session: {r.stderr.strip()}"
