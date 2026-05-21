@@ -34,9 +34,25 @@ def _api(method, token, data):
 def _menu_keyboard():
     return {
         "inline_keyboard": [
-            [{"text": "Start", "callback_data": "tmux:start"},
-             {"text": "Stop", "callback_data": "tmux:stop"}],
-            [{"text": "List", "callback_data": "tmux:list:menu"}],
+            [
+                {
+                    "text": "Start",
+                    "callback_data": "tmux:start",
+                    "style": "success"
+                },
+                {
+                    "text": "Stop",
+                    "callback_data": "tmux:stop",
+                    "style": "danger"
+                }
+            ],
+            [
+                {
+                    "text": "List",
+                    "callback_data": "tmux:list:menu",
+                    "style": "primary"
+                }
+            ],
         ]
     }
 
@@ -44,8 +60,20 @@ def _menu_keyboard():
 def _started_keyboard():
     return {
         "inline_keyboard": [
-            [{"text": "Stop", "callback_data": "tmux:stop"}],
-            [{"text": "List", "callback_data": "tmux:list:started"}],
+            [
+                {
+                    "text": "Stop",
+                    "callback_data": "tmux:stop",
+                    "style": "danger"
+                }
+            ],
+            [
+                {
+                    "text": "List",
+                    "callback_data": "tmux:list:started",
+                    "style": "primary"
+                }
+            ],
         ]
     }
 
@@ -53,7 +81,13 @@ def _started_keyboard():
 def _stopped_keyboard():
     return {
         "inline_keyboard": [
-            [{"text": "List", "callback_data": "tmux:list:stopped"}],
+            [
+                {
+                    "text": "List",
+                    "callback_data": "tmux:list:stopped",
+                    "style": "primary"
+                }
+            ],
         ]
     }
 
@@ -61,7 +95,13 @@ def _stopped_keyboard():
 def _back_keyboard(origin):
     return {
         "inline_keyboard": [
-            [{"text": "←  Back", "callback_data": f"tmux:back:{origin}"}],
+            [
+                {
+                    "text": "←  Back",
+                    "callback_data": f"tmux:back:{origin}",
+                    "style": "primary"
+                }
+            ],
         ]
     }
 
