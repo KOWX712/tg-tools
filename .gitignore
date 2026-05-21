@@ -5,3 +5,4 @@
 tgd.service
 __pycache__
 *.pyc
+chat.json

@@ -272,8 +272,22 @@ def process_message(message):
         text = message['text']
         if text.startswith("/"):
             process_command(message, text)
-        elif copy_to_clipboard(text):
-            react_to_message(chat_id, message_id, "👍")
+        else:
+            handled = False
+            if 'forward_from_chat' in message or 'forward_from' in message:
+                for name, mod in COMMANDS.items():
+                    if hasattr(mod, 'handle_forwarded'):
+                        if mod.handle_forwarded(message, BOT_TOKEN):
+                            handled = True
+                            break
+            if not handled:
+                for name, mod in COMMANDS.items():
+                    if hasattr(mod, 'handle_plain_text'):
+                        if mod.handle_plain_text(message, BOT_TOKEN):
+                            handled = True
+                            break
+            if not handled and copy_to_clipboard(text):
+                react_to_message(chat_id, message_id, "👍")
 
 
 def run_daemon():
