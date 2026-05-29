@@ -35,60 +35,100 @@ def _api(method, token, data):
         return None
 
 
+def _build_entity_tree(entities):
+    """Build tree from entities to handle nesting (blockquote>bold, bold>link, etc.)."""
+    # Parent-first sort: offset ASC, length DESC
+    sorted_ents = sorted(entities, key=lambda e: (e['offset'], -e['length']))
+
+    root = {'children': [], 'offset': 0, 'length': 0, 'type': '_root'}
+    stack = [root]
+
+    for ent in sorted_ents:
+        node = {**ent, 'children': []}
+        ent_start = ent['offset']
+        ent_end = ent['offset'] + ent['length']
+
+        # Walk stack up until current entity fits inside a parent
+        while len(stack) > 1:
+            parent = stack[-1]
+            parent_start = parent['offset']
+            parent_end = parent['offset'] + parent['length']
+            if ent_start >= parent_start and ent_end <= parent_end:
+                break
+            stack.pop()
+
+        stack[-1]['children'].append(node)
+        stack.append(node)
+
+    return root
+
+
+def _render_entity_tree(text, node):
+    """Recursively render entity tree to HTML."""
+    if node['type'] == '_root':
+        result = []
+        pos = 0
+        for child in node['children']:
+            if child['offset'] > pos:
+                result.append(htmlmod.escape(text[pos:child['offset']]))
+            result.append(_render_entity_tree(text, child))
+            pos = child['offset'] + child['length']
+        if pos < len(text):
+            result.append(htmlmod.escape(text[pos:]))
+        return ''.join(result)
+
+    ent_start = node['offset']
+    ent_end = node['offset'] + node['length']
+
+    inner = []
+    pos = ent_start
+    for child in node.get('children', []):
+        if child['offset'] > pos:
+            inner.append(htmlmod.escape(text[pos:child['offset']]))
+        inner.append(_render_entity_tree(text, child))
+        pos = child['offset'] + child['length']
+    if pos < ent_end:
+        inner.append(htmlmod.escape(text[pos:ent_end]))
+
+    inner_html = ''.join(inner)
+    etype = node['type']
+
+    if etype == 'bold':
+        return f'<b>{inner_html}</b>'
+    elif etype == 'italic':
+        return f'<i>{inner_html}</i>'
+    elif etype == 'underline':
+        return f'<u>{inner_html}</u>'
+    elif etype == 'strikethrough':
+        return f'<s>{inner_html}</s>'
+    elif etype == 'spoiler':
+        return f'<tg-spoiler>{inner_html}</tg-spoiler>'
+    elif etype == 'code':
+        return f'<code>{inner_html}</code>'
+    elif etype == 'pre':
+        lang = node.get('language', '')
+        if lang:
+            return f'<pre><code class="language-{lang}">{inner_html}</code></pre>'
+        return f'<pre>{inner_html}</pre>'
+    elif etype == 'text_link':
+        url = node.get('url', '')
+        return f'<a href="{url}">{inner_html}</a>'
+    elif etype == 'text_mention':
+        uid = node.get('user', {}).get('id', '')
+        return f'<a href="tg://user?id={uid}">{inner_html}</a>'
+    elif etype in ('blockquote', 'expandable_blockquote'):
+        return f'<blockquote>{inner_html}</blockquote>'
+    else:
+        return inner_html
+
+
 def _entities_to_html(text, entities):
-    """Convert plain text + Telegram entities to HTML."""
+    """Convert plain text + Telegram entities to HTML with proper nesting."""
     if not entities:
-        return text
+        return htmlmod.escape(text)
 
-    entities = sorted(entities, key=lambda e: (e['offset'], -e['length']))
-    result = []
-    pos = 0
-
-    for ent in entities:
-        if ent['offset'] > pos:
-            result.append(htmlmod.escape(text[pos:ent['offset']]))
-
-        raw = text[ent['offset']:ent['offset'] + ent['length']]
-        etype = ent['type']
-
-        if etype == 'bold':
-            result.append(f'<b>{htmlmod.escape(raw)}</b>')
-        elif etype == 'italic':
-            result.append(f'<i>{htmlmod.escape(raw)}</i>')
-        elif etype == 'underline':
-            result.append(f'<u>{htmlmod.escape(raw)}</u>')
-        elif etype == 'strikethrough':
-            result.append(f'<s>{htmlmod.escape(raw)}</s>')
-        elif etype == 'spoiler':
-            result.append(f'<tg-spoiler>{htmlmod.escape(raw)}</tg-spoiler>')
-        elif etype == 'code':
-            result.append(f'<code>{htmlmod.escape(raw)}</code>')
-        elif etype == 'pre':
-            lang = ent.get('language', '')
-            escaped = htmlmod.escape(raw)
-            if lang:
-                result.append(f'<pre><code class="language-{lang}">{escaped}</code></pre>')
-            else:
-                result.append(f'<pre>{escaped}</pre>')
-        elif etype == 'text_link':
-            url = ent.get('url', '')
-            result.append(f'<a href="{url}">{htmlmod.escape(raw)}</a>')
-        elif etype == 'text_mention':
-            uid = ent.get('user', {}).get('id', '')
-            result.append(f'<a href="tg://user?id={uid}">{htmlmod.escape(raw)}</a>')
-        elif etype == 'blockquote':
-            result.append(f'<blockquote>{htmlmod.escape(raw)}</blockquote>')
-        elif etype == 'expandable_blockquote':
-            result.append(f'<blockquote>{htmlmod.escape(raw)}</blockquote>')
-        else:
-            result.append(htmlmod.escape(raw))
-
-        pos = ent['offset'] + ent['length']
-
-    if pos < len(text):
-        result.append(htmlmod.escape(text[pos:]))
-
-    return ''.join(result)
+    tree = _build_entity_tree(entities)
+    return _render_entity_tree(text, tree)
 
 
 def _raw_markdown_to_html(text):
