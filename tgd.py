@@ -211,8 +211,45 @@ def process_callback_query(callback_query):
                 print(f"Error in callback for {cmd_name}: {e}", flush=True)
 
 
-def download_file(file_id, file_name):
-    """Downloads a file from Telegram."""
+MIME_EXTENSION_MAP = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/bmp": ".bmp",
+    "image/svg+xml": ".svg",
+    "image/tiff": ".tiff",
+    "image/x-icon": ".ico",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
+    "video/x-matroska": ".mkv",
+    "video/quicktime": ".mov",
+    "audio/mpeg": ".mp3",
+    "audio/ogg": ".ogg",
+    "audio/wav": ".wav",
+    "audio/flac": ".flac",
+    "application/pdf": ".pdf",
+    "application/zip": ".zip",
+    "application/gzip": ".gz",
+    "application/x-tar": ".tar",
+    "application/x-7z-compressed": ".7z",
+    "application/json": ".json",
+    "text/plain": ".txt",
+    "text/csv": ".csv",
+    "text/html": ".html",
+    "text/xml": ".xml",
+}
+
+
+def _mime_extension(mime_type):
+    if not mime_type:
+        return None
+    return MIME_EXTENSION_MAP.get(mime_type.lower().split(";")[0].strip())
+
+
+def download_file(file_id, file_name, mime_type=None):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getFile"
         params = {'file_id': file_id}
@@ -227,6 +264,26 @@ def download_file(file_id, file_name):
 
         if not file_name:
             file_name = os.path.basename(file_path)
+
+        known_exts = {
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp",
+            ".svg", ".tiff", ".tif", ".ico",
+            ".mp4", ".webm", ".mkv", ".mov",
+            ".mp3", ".ogg", ".wav", ".flac",
+            ".pdf", ".zip", ".gz", ".tar", ".7z",
+            ".json", ".txt", ".csv", ".html", ".xml",
+        }
+        name_part, ext_part = os.path.splitext(file_name)
+        current_ext = ext_part.lower() if ext_part else ""
+
+        if mime_type:
+            mime_ext = _mime_extension(mime_type)
+            if mime_ext and mime_ext != current_ext:
+                file_name = f"{name_part}{mime_ext}"
+        elif not current_ext or current_ext not in known_exts:
+            server_ext = os.path.splitext(os.path.basename(file_path))[1]
+            if server_ext:
+                file_name = f"{name_part}{server_ext}"
 
         local_path = os.path.join(DOWNLOAD_DIR, file_name)
 
@@ -258,7 +315,7 @@ def process_message(message):
 
     if 'document' in message:
         doc = message['document']
-        if download_file(doc['file_id'], doc.get('file_name')):
+        if download_file(doc['file_id'], doc.get('file_name'), doc.get('mime_type')):
             react_to_message(chat_id, message_id, "👍")
     elif 'photo' in message:
         photo = message['photo'][-1]
@@ -266,7 +323,7 @@ def process_message(message):
             react_to_message(chat_id, message_id, "👍")
     elif 'video' in message:
         video = message['video']
-        if download_file(video['file_id'], video.get('file_name')):
+        if download_file(video['file_id'], video.get('file_name'), video.get('mime_type')):
             react_to_message(chat_id, message_id, "👍")
     elif 'text' in message:
         text = message['text']
